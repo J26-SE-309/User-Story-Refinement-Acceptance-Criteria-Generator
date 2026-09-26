@@ -1,0 +1,36 @@
+# User Story Refinement and Acceptance Criteria Generator: this service and its own database.
+# Run it on its own with `docker compose up --build`, or as part of the whole
+# platform from AgilePlatform/docker-compose.yml.
+name: story-refinement
+
+services:
+  story-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: story_db
+      POSTGRES_USER: story_user
+      POSTGRES_PASSWORD: ${STORY_DB_PASSWORD:-story-local}
+    ports:
+      - "127.0.0.1:5442:5432"
+    volumes:
+      - story-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U story_user -d story_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  story-api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://story_user:${STORY_DB_PASSWORD:-story-local}@story-db:5432/story_db
+    ports:
+      - "127.0.0.1:8002:8002"
+    depends_on:
+      story-db:
+        condition: service_healthy
+
+volumes:
+  # Fixed name keeps the data whether this file runs alone or from AgilePlatform/docker-compose.yml.
+  story-db-data:
+    name: story-db-data
