@@ -13,10 +13,11 @@ dependencies = [
   "pydantic-settings>=2.4",
   "sqlalchemy>=2.0",
   "psycopg[binary]>=3.2",
+  "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx2>=2.0", "ruff>=0.6"]
+dev = ["pytest>=8", "httpx2>=2.0", "ruff>=0.6", "aiosqlite>=0.20"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

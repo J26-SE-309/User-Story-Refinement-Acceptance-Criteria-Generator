@@ -3,6 +3,8 @@
 They mirror the JSON Schemas in Synapse-Web/contracts/story-refinement; change both together.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -11,6 +13,37 @@ class RefinementRequest(BaseModel):
     project_id: str | None = None
     validated_requirement: str = Field(min_length=1)
     context_reference: str | None = Field(default=None, description="Project-context package to retrieve from")
+
+
+class ProjectCreate(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+
+
+class ProjectContextCreate(BaseModel):
+    context_key: str = Field(min_length=1, max_length=200)
+    context_type: str = Field(min_length=1, max_length=40)
+    content: str = Field(min_length=1)
+    source_reference: str | None = Field(default=None, max_length=500)
+    authoritative: bool = True
+
+
+class ProjectResponse(ProjectCreate):
+    model_config = {"from_attributes": True}
+
+
+class ProjectContextResponse(ProjectContextCreate):
+    id: int
+    project_id: str
+    model_config = {"from_attributes": True}
+
+
+class ReviewDecisionRequest(BaseModel):
+    reviewer: str = Field(min_length=1, max_length=200)
+    status: Literal["approved", "rejected", "changes_requested"]
+    candidate_id: int | None = Field(default=None, gt=0)
+    notes: str = ""
 
 
 class AcceptanceCriterion(BaseModel):
@@ -40,6 +73,7 @@ class QualityScores(BaseModel):
 
 
 class RefinedStory(BaseModel):
+    refinement_id: int | None = Field(default=None, gt=0)
     requirement_id: str
     story_id: str
     user_story: str

@@ -67,6 +67,20 @@ This component has its own PostgreSQL database and account. No other component c
 | Database | `story_db` |
 | User / password | `story_user` / `story-local` |
 
+The backend owns additive refinement-storage tables managed by Alembic. Apply them only after
+confirming the live `story_db` catalog is free of those table names:
+
+```powershell
+cd backend
+..\.venv\Scripts\alembic upgrade head
+```
+
+The migration creates project context, validated requirement, existing-story, generation,
+candidate, evaluation, context-reference, and review-decision tables. It does not drop or
+alter existing tables or delete existing records. The migration intentionally stops if any
+target table already exists outside Alembic so an existing database cannot be duplicated or
+silently overwritten.
+
 ### API contract
 
 Until the models are in place, the endpoints return placeholder results marked `model_version: "stub"`, so the
