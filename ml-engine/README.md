@@ -3,13 +3,22 @@
 Research code for this component: preparing datasets, training and evaluating models.
 The API in [`../backend`](../backend) loads the trained models to serve results to the platform.
 
-## Planned work (from the proposal)
+## Implemented engine
 
-- **Project-context retrieval:** semantic retrieval of existing stories, terminology and business rules.
-- **Generation:** a locally deployed LLM generates several user-story and acceptance-criteria candidates.
-- **Quality optimisation:** score candidates on INVEST, completeness, clarity, testability, consistency and context relevance, then rank and select.
-- **Unsupported-assumption detection:** check generated claims against the requirement and context.
+- **Project-context retrieval:** project-scoped TF-IDF/cosine retrieval over supplied stories, criteria, glossary entries, business rules and requirements.
+- **Generation:** an Ollama-compatible local HTTP client generates structured JSON candidates.
+- **Quality optimisation:** deterministic INVEST, clarity, completeness, testability, consistency, context relevance and acceptance-criteria coverage heuristics rank valid candidates.
+- **Unsupported-assumption detection:** generated story/criterion outcomes are compared with explicit requirement/context evidence; lexical similarity is not treated as proof.
 - **Evaluation:** compare against baseline LLM prompting with automated measures and expert ratings.
+
+The engine does not call cloud services. `STORY_LLM_BASE_URL`, `STORY_LLM_MODEL`,
+`STORY_LLM_TIMEOUT_SECONDS`, and `STORY_CANDIDATE_COUNT` configure the local provider.
+Model failures and malformed JSON raise explicit errors; no placeholder or cloud fallback is used.
+Quality scores are documented heuristics and require research validation against expert ratings.
+
+The main entry point is `story_ml.pipeline.refine_requirement`. It returns a structured
+`RefinementResult` with retrieved source references, ranked candidates, the best candidate
+when one passes validation, risks, and model metadata.
 
 ## Layout
 
