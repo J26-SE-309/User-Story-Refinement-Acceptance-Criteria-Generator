@@ -3,6 +3,7 @@
 import math
 import re
 from collections import Counter
+
 from story_ml.types import ContextDocument, RetrievedContext
 
 # _TOKEN = re.compile(r"[a-z0-9]+")

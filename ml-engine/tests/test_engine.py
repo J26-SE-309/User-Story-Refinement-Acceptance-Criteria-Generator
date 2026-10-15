@@ -1,10 +1,10 @@
 import pytest
+
+from story_ml.config import LLMSettings
+from story_ml.generation import parse_candidates
 from story_ml.llm import LLMResponseError, LLMUnavailable
 from story_ml.pipeline import refine_requirement
 from story_ml.types import ContextDocument
-from story_ml.config import LLMSettings
-from story_ml.generation import parse_candidates
-
 
 
 def criterion():

@@ -4,13 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(frozen=True)
-class ContextDocument:
-    project_id: str
-    source_id: str
-    source_type: str
-    text: str
-    source_reference: str
+
 
 
 @dataclass(frozen=True)
@@ -18,13 +12,14 @@ class RetrievedContext:
     document: ContextDocument
     score: float
 
-
-
 @dataclass(frozen=True)
-class CandidateDraft:
-    story_id: str
-    user_story: str
-    acceptance_criteria: list[AcceptanceCriterion]
+class ContextDocument:
+    project_id: str
+    source_id: str
+    source_type: str
+    text: str
+    source_reference: str
+    
 
 @dataclass(frozen=True)
 class AcceptanceCriterion:
@@ -33,23 +28,8 @@ class AcceptanceCriterion:
     when: str
     then: str
 
-@dataclass(frozen=True)
-class Finding:
-    statement: str
-    reason: str
-    evidence: tuple[str, ...] = ()
-    kind: str = "unsupported_claim"
 
 
-
-
-
-@dataclass(frozen=True)
-class RankedCandidate:
-    candidate: CandidateDraft
-    evaluation: QualityEvaluation
-    rank: int
-    ranking_rationale: str
 
 @dataclass(frozen=True)
 class QualityEvaluation:
@@ -63,7 +43,30 @@ class QualityEvaluation:
     def overall_score(self) -> float:
         return self.scores.get("overall", 0.0)
 
-        
+
+@dataclass(frozen=True)
+class CandidateDraft:
+    story_id: str
+    user_story: str
+    acceptance_criteria: list[AcceptanceCriterion]
+
+
+@dataclass(frozen=True)
+class Finding:
+    statement: str
+    reason: str
+    evidence: tuple[str, ...] = ()
+    kind: str = "unsupported_claim"
+
+
+@dataclass(frozen=True)
+class RankedCandidate:
+    candidate: CandidateDraft
+    evaluation: QualityEvaluation
+    rank: int
+    ranking_rationale: str
+
+
 @dataclass(frozen=True)
 class RefinementResult:
     status: str

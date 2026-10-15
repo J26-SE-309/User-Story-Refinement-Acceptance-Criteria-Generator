@@ -2,11 +2,10 @@
 
 from story_ml.config import LLMSettings, RankingSettings
 from story_ml.evaluation import rank_candidates
+from story_ml.generation import generate_candidates
 from story_ml.llm import OllamaClient
 from story_ml.retrieval import SemanticContextRetriever
 from story_ml.types import ContextDocument, RankedCandidate, RefinementResult
-from story_ml.generation import generate_candidates
-
 
 
 def refine_requirement(

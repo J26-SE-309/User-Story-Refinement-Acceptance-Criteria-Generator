@@ -1,10 +1,13 @@
 """Transactional persistence operations for refinement requests."""
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     CandidateAcceptanceCriterion,
     CandidateQualityEvaluation,
+    ExistingStory,
+    ExistingStoryAcceptanceCriterion,
     Project,
     ProjectContextEntry,
     RefinementContextReference,
@@ -14,6 +17,8 @@ from app.models import (
     ValidatedRequirement,
 )
 from app.schemas import (
+    ExistingStoryCreate,
+    ExistingStoryUpdate,
     ProjectContextCreate,
     ProjectCreate,
     RefinedStory,
@@ -126,3 +131,186 @@ def record_review(session: Session, run_id: int, request: ReviewDecisionRequest)
         session.add(decision)
         run.status = request.status
     return decision
+
+
+def get_refinement(session: Session, run_id: int) -> RefinementRun | None:
+    return session.scalar(
+        select(RefinementRun)
+        .options(
+            selectinload(RefinementRun.candidates).selectinload(StoryCandidate.acceptance_criteria),
+            selectinload(RefinementRun.candidates).selectinload(StoryCandidate.evaluation),
+            selectinload(RefinementRun.context_references),
+        )
+        .where(RefinementRun.id == run_id)
+    )
+
+
+def list_context_entries(session: Session, project_id: str) -> list[ProjectContextEntry]:
+    return list(
+        session.scalars(
+            select(ProjectContextEntry)
+            .where(ProjectContextEntry.project_id == project_id)
+            .order_by(ProjectContextEntry.id)
+        )
+    )
+
+
+def get_context_entry(session: Session, project_id: str, entry_id: int) -> ProjectContextEntry | None:
+    return session.scalar(
+        select(ProjectContextEntry).where(
+            ProjectContextEntry.project_id == project_id,
+            ProjectContextEntry.id == entry_id,
+        )
+    )
+
+
+def update_context_entry(session: Session, entry: ProjectContextEntry, changes: dict) -> ProjectContextEntry:
+    with session.begin():
+        for key, value in changes.items():
+            if value is not None:
+                setattr(entry, key, value)
+        session.add(entry)
+    return entry
+
+
+def create_existing_story(session: Session, project_id: str, request: ExistingStoryCreate) -> ExistingStory:
+    with session.begin():
+        if session.scalar(select(Project.id).where(Project.id == project_id)) is None:
+            raise LookupError(f"Project '{project_id}' does not exist.")
+        story = ExistingStory(
+            project_id=project_id,
+            story_id=request.story_id,
+            title=request.title,
+            description=request.description,
+            source_reference=request.source_reference,
+        )
+        story.acceptance_criteria = [
+            ExistingStoryAcceptanceCriterion(criterion_id=f"AC{index}", text=text)
+            for index, text in enumerate(request.acceptance_criteria, start=1)
+        ]
+        session.add(story)
+        session.flush()
+    return story
+
+
+def list_existing_stories(session: Session, project_id: str) -> list[ExistingStory]:
+    return list(
+        session.scalars(
+            select(ExistingStory)
+            .options(selectinload(ExistingStory.acceptance_criteria))
+            .where(ExistingStory.project_id == project_id)
+            .order_by(ExistingStory.id)
+        )
+    )
+
+
+def get_existing_story(session: Session, project_id: str, story_pk: int) -> ExistingStory | None:
+    return session.scalar(
+        select(ExistingStory)
+        .options(selectinload(ExistingStory.acceptance_criteria))
+        .where(ExistingStory.project_id == project_id, ExistingStory.id == story_pk)
+    )
+
+
+def update_existing_story(session: Session, story: ExistingStory, request: ExistingStoryUpdate) -> ExistingStory:
+    with session.begin():
+        values = request.model_dump(exclude_unset=True, exclude={"acceptance_criteria"})
+        for key, value in values.items():
+            setattr(story, key, value)
+        if request.acceptance_criteria is not None:
+            story.acceptance_criteria.clear()
+            story.acceptance_criteria.extend(
+                ExistingStoryAcceptanceCriterion(criterion_id=f"AC{index}", text=text)
+                for index, text in enumerate(request.acceptance_criteria, start=1)
+            )
+        session.add(story)
+    return story
+
+
+def persist_engine_result(
+    session: Session,
+    project_id: str,
+    requirement_id: str,
+    requirement_text: str,
+    context_reference: str | None,
+    engine_result,
+) -> RefinementRun:
+    """Persist the complete engine result after inference has finished."""
+    with session.begin():
+        project = session.get(Project, project_id)
+        if project is None:
+            raise LookupError(f"Project '{project_id}' does not exist.")
+        requirement = session.get(ValidatedRequirement, requirement_id)
+        if requirement is None:
+            requirement = ValidatedRequirement(
+                id=requirement_id,
+                project_id=project_id,
+                text=requirement_text,
+            )
+            session.add(requirement)
+            session.flush()
+        else:
+            requirement.text = requirement_text
+            requirement.project_id = project_id
+
+        run = RefinementRun(
+            requirement_id=requirement_id,
+            project_id=project_id,
+            context_reference=context_reference,
+            status=engine_result.status,
+            processing_time_ms=0,
+            model_metadata={str(key): str(value) for key, value in engine_result.metadata.items()},
+        )
+        session.add(run)
+        session.flush()
+        for item in engine_result.retrieved_context:
+            context_entry = session.scalar(
+                select(ProjectContextEntry).where(
+                    ProjectContextEntry.project_id == project_id,
+                    ProjectContextEntry.source_reference == item.document.source_reference,
+                )
+            )
+            session.add(
+                RefinementContextReference(
+                    run_id=run.id,
+                    context_entry_id=context_entry.id if context_entry else None,
+                    source_reference=item.document.source_reference,
+                    relevance_score=item.score,
+                )
+            )
+        for item in engine_result.candidates:
+            candidate = StoryCandidate(
+                run_id=run.id,
+                story_id=item.candidate.story_id,
+                user_story=item.candidate.user_story,
+                rank=item.rank,
+                selected=engine_result.best_candidate is item,
+                unsupported_assumptions=[
+                    finding.statement for finding in item.evaluation.findings if finding.kind == "unsupported_claim"
+                ],
+                inconsistencies=[
+                    finding.statement for finding in item.evaluation.findings if finding.kind == "contradiction"
+                ],
+            )
+            session.add(candidate)
+            session.flush()
+            for criterion in item.candidate.acceptance_criteria:
+                session.add(
+                    CandidateAcceptanceCriterion(
+                        candidate_id=candidate.id,
+                        criterion_id=criterion.id,
+                        given=criterion.given,
+                        when=criterion.when,
+                        then=criterion.then,
+                    )
+                )
+            session.add(
+                CandidateQualityEvaluation(
+                    candidate_id=candidate.id,
+                    scores={**item.evaluation.scores, "invest": item.evaluation.invest},
+                    explanations=item.evaluation.explanations,
+                )
+            )
+            if engine_result.best_candidate is item:
+                run.selected_candidate_id = candidate.id
+    return run

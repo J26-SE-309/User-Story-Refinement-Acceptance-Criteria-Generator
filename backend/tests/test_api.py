@@ -79,3 +79,112 @@ def test_project_context_endpoint_persists_glossary_entry_and_rejects_duplicate_
         json={"context_key": "booking.term", "context_type": "business_rule", "content": "Duplicate."},
     )
     assert duplicate.status_code == 409
+
+
+def test_story_refinement_generate_persists_candidates_and_can_be_retrieved(client, monkeypatch):
+    from story_ml.types import (
+        AcceptanceCriterion,
+        CandidateDraft,
+        QualityEvaluation,
+        RankedCandidate,
+        RefinementResult,
+    )
+
+    client.post("/api/v1/projects", json={"id": "PROJ-GEN", "name": "Generation project"})
+    candidate = CandidateDraft(
+        story_id="REQ-GEN-S1",
+        user_story="As a learner, I want to book a tutor, so that I can learn.",
+        acceptance_criteria=[
+            AcceptanceCriterion(
+                id="AC1",
+                given="a learner",
+                when="the learner books a tutor",
+                then="the booking is created",
+            )
+        ],
+    )
+    evaluation = QualityEvaluation(
+        invest={
+            "independent": True,
+            "negotiable": True,
+            "valuable": True,
+            "estimable": True,
+            "small": True,
+            "testable": True,
+        },
+        scores={
+            "invest": 1.0,
+            "clarity": 1.0,
+            "completeness": 1.0,
+            "testability": 1.0,
+            "consistency": 1.0,
+            "context_relevance": 0.5,
+            "acceptance_criteria_coverage": 1.0,
+            "overall": 0.93,
+        },
+        explanations={"overall": "deterministic test result"},
+    )
+    ranked = RankedCandidate(candidate, evaluation, 1, "highest configured score")
+    fake_result = RefinementResult(
+        status="completed",
+        candidates=[ranked],
+        best_candidate=ranked,
+        retrieved_context=[],
+        risks=[],
+        metadata={"model": "test-local"},
+    )
+
+    import story_ml.pipeline
+
+    monkeypatch.setattr(story_ml.pipeline, "refine_requirement", lambda *args, **kwargs: fake_result)
+    response = client.post(
+        "/api/v1/story-refinement/generate",
+        json={
+            "project_id": "PROJ-GEN",
+            "requirement_id": "REQ-GEN",
+            "validated_requirement": "A learner can book a tutor.",
+            "options": {"candidate_count": 1},
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["selected_candidate"]["story_id"] == "REQ-GEN-S1"
+    retrieved = client.get(f"/api/v1/story-refinement/{body['generation_id']}")
+    assert retrieved.status_code == 200
+    assert retrieved.json()["candidates"][0]["quality_scores"]["overall"] == 0.93
+
+
+def test_story_refinement_generate_returns_not_found_for_missing_project(client):
+    response = client.post(
+        "/api/v1/story-refinement/generate",
+        json={
+            "project_id": "MISSING",
+            "requirement_id": "REQ-MISSING",
+            "validated_requirement": "A learner can book a tutor.",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_story_refinement_generate_maps_local_model_failure(client, monkeypatch):
+    from story_ml.llm import LLMUnavailable
+
+    client.post("/api/v1/projects", json={"id": "PROJ-FAIL", "name": "Failure project"})
+    import story_ml.pipeline
+
+    monkeypatch.setattr(
+        story_ml.pipeline,
+        "refine_requirement",
+        lambda *args, **kwargs: (_ for _ in ()).throw(LLMUnavailable("test timeout")),
+    )
+    response = client.post(
+        "/api/v1/story-refinement/generate",
+        json={
+            "project_id": "PROJ-FAIL",
+            "requirement_id": "REQ-FAIL",
+            "validated_requirement": "A learner can book a tutor.",
+        },
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Local model unavailable."
