@@ -2,9 +2,8 @@
 
 import json
 from collections.abc import Mapping
-
-from story_ml.llm import LLMResponseError, OllamaClient
 from story_ml.types import AcceptanceCriterion, CandidateDraft, RetrievedContext
+from story_ml.llm import LLMResponseError, OllamaClient
 
 
 def build_prompt(
