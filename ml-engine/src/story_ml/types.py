@@ -1,5 +1,7 @@
 """Typed data contracts for the context-aware refinement engine."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 
