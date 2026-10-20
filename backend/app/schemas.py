@@ -131,6 +131,18 @@ class QualityValidationResponse(BaseModel):
     checks: dict[str, bool]
 
 
+class StoryUpdateRequest(BaseModel):
+    user_story: str = Field(min_length=1)
+    acceptance_criteria: list[AcceptanceCriterion] = Field(min_length=1)
+
+
+class StoryStatusResponse(BaseModel):
+    story_id: str
+    available: bool
+    message: str
+    details: dict[str, object] = Field(default_factory=dict)
+
+
 class CandidateResponse(BaseModel):
     id: int | None = None
     story_id: str

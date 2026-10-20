@@ -15,6 +15,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+training = [
+  "torch>=2.2",
+  "transformers>=4.45",
+  "datasets>=2.20",
+  "peft>=0.12",
+  "accelerate>=0.34",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/story_ml"]

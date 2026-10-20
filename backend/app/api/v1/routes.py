@@ -1,10 +1,7 @@
-"""Version 1 of the refinement API.
+"""Version 1 of the refinement API."""
 
-Until the local LLM, context retrieval and candidate optimisation are plugged in, the
-endpoint returns a placeholder story (model_version "stub") so the gateway and frontend
-can be built against the real contract.
-"""
-
+import os
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,12 +9,14 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import db
+from app.config import get_settings
 from app.models import ExistingStory, Project
 from app.quality import validate_story_quality
 from app.repositories import (
     add_context_entry,
     create_existing_story,
     create_project,
+    get_candidate_by_story_id,
     get_context_entry,
     get_existing_story,
     get_refinement,
@@ -26,6 +25,7 @@ from app.repositories import (
     persist_engine_result,
     persist_refinement,
     record_review,
+    update_candidate,
     update_context_entry,
     update_existing_story,
 )
@@ -49,10 +49,44 @@ from app.schemas import (
     ReviewDecisionResponse,
     StoryRefinementGenerateRequest,
     StoryRefinementGenerateResponse,
+    StoryStatusResponse,
+    StoryUpdateRequest,
 )
 from app.services.generation import generate_baseline
 
 router = APIRouter(tags=["user story refinement"])
+
+
+@router.get("/datasets/status", response_model=StoryStatusResponse)
+def dataset_status() -> StoryStatusResponse:
+    data_dir = Path(get_settings().story_data_dir).resolve()
+    files = [item for item in data_dir.rglob("*") if item.is_file()] if data_dir.exists() else []
+    return StoryStatusResponse(
+        story_id="dataset",
+        available=data_dir.exists(),
+        message="Dataset directory is available." if data_dir.exists() else "Dataset directory is not available.",
+        details={
+            "data_dir": str(data_dir),
+            "file_count": len(files),
+            "split_files": [
+                item.name for item in files if item.name in {"train.jsonl", "validation.jsonl", "test.jsonl"}
+            ],
+        },
+    )
+
+
+@router.get("/models/status", response_model=StoryStatusResponse)
+def model_status() -> StoryStatusResponse:
+    settings = get_settings()
+    return StoryStatusResponse(
+        story_id="model",
+        available=True,
+        message="Configured baseline inference is available; fine-tuning is optional.",
+        details={
+            "generation_mode": settings.story_generation_mode,
+            "ollama_model": os.environ.get("STORY_LLM_MODEL", "llama3.2"),
+        },
+    )
 
 
 @router.post("/requirements/validate", response_model=QualityValidationResponse)
@@ -378,6 +412,37 @@ def get_story_refinement(
         risks=[],
         metadata=run.model_metadata,
     )
+
+
+@router.get("/stories/{story_id}", response_model=CandidateResponse)
+def get_story(story_id: str, session: Annotated[Session, Depends(db.get_session)]) -> CandidateResponse:
+    candidate = get_candidate_by_story_id(session, story_id)
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found.")
+    return _candidate_response(candidate, candidate.id)
+
+
+@router.put("/stories/{story_id}", response_model=CandidateResponse)
+def edit_story(
+    story_id: str,
+    request: StoryUpdateRequest,
+    session: Annotated[Session, Depends(db.get_session)],
+) -> CandidateResponse:
+    candidate = get_candidate_by_story_id(session, story_id)
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found.")
+    quality = validate_story_quality(request.user_story, request.acceptance_criteria)
+    if not quality.valid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": "Edited story failed structural validation.", "validation": quality.model_dump()},
+        )
+    try:
+        updated = update_candidate(session, candidate, request.user_story, request.acceptance_criteria)
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Story update failed.") from exc
+    return _candidate_response(updated, updated.id)
 
 
 @router.post(

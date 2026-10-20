@@ -17,6 +17,7 @@ from app.models import (
     ValidatedRequirement,
 )
 from app.schemas import (
+    AcceptanceCriterion,
     ExistingStoryCreate,
     ExistingStoryUpdate,
     ProjectContextCreate,
@@ -143,6 +144,56 @@ def get_refinement(session: Session, run_id: int) -> RefinementRun | None:
         )
         .where(RefinementRun.id == run_id)
     )
+
+
+def get_candidate_by_story_id(session: Session, story_id: str) -> StoryCandidate | None:
+    return session.scalar(
+        select(StoryCandidate)
+        .options(
+            selectinload(StoryCandidate.acceptance_criteria),
+            selectinload(StoryCandidate.evaluation),
+            selectinload(StoryCandidate.run),
+        )
+        .where(StoryCandidate.story_id == story_id)
+    )
+
+
+def update_candidate(
+        session: Session,
+        candidate: StoryCandidate,
+        user_story: str,
+        acceptance_criteria: list[AcceptanceCriterion],
+) -> StoryCandidate:
+    session.rollback()
+    with session.begin():
+        if candidate.original_user_story is None:
+            candidate.original_user_story = candidate.user_story
+            candidate.original_acceptance_criteria = [
+                {
+                    "id": item.criterion_id,
+                    "given": item.given,
+                    "when": item.when,
+                    "then": item.then,
+                }
+                for item in candidate.acceptance_criteria
+            ]
+        candidate.user_story = user_story
+        for criterion in list(candidate.acceptance_criteria):
+            session.delete(criterion)
+        candidate.acceptance_criteria = []
+        session.flush()
+        candidate.acceptance_criteria.extend(
+            CandidateAcceptanceCriterion(
+                criterion_id=item.id,
+                given=item.given,
+                when=item.when,
+                then=item.then,
+            )
+            for item in acceptance_criteria
+        )
+        candidate.run.status = "edited"
+        session.add(candidate)
+    return candidate
 
 
 def list_context_entries(session: Session, project_id: str) -> list[ProjectContextEntry]:

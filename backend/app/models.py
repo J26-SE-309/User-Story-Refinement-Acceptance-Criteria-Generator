@@ -146,6 +146,8 @@ class StoryCandidate(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("refinement_runs.id", ondelete="CASCADE"))
     story_id: Mapped[str] = mapped_column(String(200))
     user_story: Mapped[str] = mapped_column(Text)
+    original_user_story: Mapped[str | None] = mapped_column(Text, nullable=True)
+    original_acceptance_criteria: Mapped[list | None] = mapped_column(JSON, nullable=True)
     rank: Mapped[int] = mapped_column(Integer)
     selected: Mapped[bool] = mapped_column(Boolean, default=False)
     unsupported_assumptions: Mapped[list[str]] = mapped_column(JSON, default=list)

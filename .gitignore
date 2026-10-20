@@ -32,6 +32,8 @@ npm-debug.log*
 ml-engine/data/
 ml-engine/artifacts/
 Datasets/
+*.log
+logs/
 mlruns/
 *.parquet
 *.safetensors

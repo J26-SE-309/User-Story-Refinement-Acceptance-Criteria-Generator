@@ -54,6 +54,43 @@ def test_requirements_validate_separates_errors_and_warnings(client):
     assert body["requires_human_review"] is True
 
 
+def test_status_endpoints_are_informative(client):
+    dataset = client.get("/api/v1/datasets/status")
+    model = client.get("/api/v1/models/status")
+
+    assert dataset.status_code == 200
+    assert "data_dir" in dataset.json()["details"]
+    assert model.status_code == 200
+    assert model.json()["details"]["generation_mode"]
+
+
+def test_story_can_be_retrieved_and_edited_without_losing_original(client):
+    generated = client.post(
+        "/api/v1/refine",
+        json={"requirement_id": "REQ-EDIT", "validated_requirement": "A learner can book a tutor."},
+    ).json()
+    story_id = generated["story_id"]
+    edited = client.put(
+        f"/api/v1/stories/{story_id}",
+        json={
+            "user_story": "As a learner, I want to book a tutor, so that I can attend a lesson.",
+            "acceptance_criteria": [
+                {
+                    "id": "AC1",
+                    "given": "an available tutor exists",
+                    "when": "the learner books the tutor",
+                    "then": "the booking is created",
+                }
+            ],
+        },
+    )
+
+    assert edited.status_code == 200
+    assert edited.json()["user_story"].endswith("attend a lesson.")
+    retrieved = client.get(f"/api/v1/stories/{story_id}")
+    assert retrieved.status_code == 200
+
+
 def test_refine_persists_requirement_candidate_criteria_and_evaluation(client, test_session_factory):
     response = client.post(
         "/api/v1/refine",

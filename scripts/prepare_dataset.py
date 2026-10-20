@@ -184,7 +184,12 @@ def split_records(records: list[dict[str, Any]], seed: int = 42) -> dict[str, li
     }
 
 
-def prepare_dataset(input_path: Path, output_dir: Path, seed: int = 42) -> dict[str, Any]:
+def prepare_dataset(
+    input_path: Path,
+    output_dir: Path,
+    seed: int = 42,
+    splits_dir: Path | None = None,
+) -> dict[str, Any]:
     records = _normalise_source_records(_read_records(input_path))
     normalised, report = validate_records(records)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -198,8 +203,10 @@ def prepare_dataset(input_path: Path, output_dir: Path, seed: int = 42) -> dict[
     }
     (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     valid = [record for record in normalised if record["record_id"] not in {item["record_id"] for item in report["errors"]}]
+    splits_dir = splits_dir or output_dir.parent / "splits"
+    splits_dir.mkdir(parents=True, exist_ok=True)
     for split, split_records_data in split_records(valid, seed).items():
-        with (output_dir / f"{split}.jsonl").open("w", encoding="utf-8") as handle:
+        with (splits_dir / f"{split}.jsonl").open("w", encoding="utf-8") as handle:
             for record in split_records_data:
                 handle.write(json.dumps(record, ensure_ascii=True) + "\n")
     return report
@@ -214,9 +221,10 @@ def main() -> None:
         help="JSONL, CSV, or XLSX input file",
     )
     parser.add_argument("--output-dir", type=Path, default=default_data_dir() / "processed")
+    parser.add_argument("--splits-dir", type=Path, default=default_data_dir() / "splits")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
-    report = prepare_dataset(args.input, args.output_dir, args.seed)
+    report = prepare_dataset(args.input, args.output_dir, args.seed, args.splits_dir)
     print(json.dumps(report, indent=2))
 
 
