@@ -14,6 +14,46 @@ def test_refine_rejects_an_empty_requirement(client):
     assert response.status_code == 422
 
 
+def test_requirements_generate_returns_structured_baseline(client):
+    response = client.post(
+        "/api/v1/requirements/generate",
+        json={
+            "requirement_id": "REQ-BASELINE",
+            "validated_requirement": "A learner can book a tutor.",
+            "user_role": "learner",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user_story"] == (
+        "As a learner, I want A learner can book a tutor, so that the requested outcome is achieved."
+    )
+    assert body["acceptance_criteria"][0].keys() >= {"given", "when", "then"}
+    assert body["model_metadata"]["requires_human_review"] == "true"
+
+
+def test_requirements_validate_separates_errors_and_warnings(client):
+    response = client.post(
+        "/api/v1/requirements/validate",
+        json={
+            "user_story": "not a user story",
+            "acceptance_criteria": [],
+            "assumptions": ["The role is inferred."],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is False
+    assert {item["code"] for item in body["errors"]} >= {
+        "invalid_user_story_format",
+        "empty_acceptance_criteria",
+    }
+    assert body["warnings"][0]["code"] == "unsupported_assumption"
+    assert body["requires_human_review"] is True
+
+
 def test_refine_persists_requirement_candidate_criteria_and_evaluation(client, test_session_factory):
     response = client.post(
         "/api/v1/refine",

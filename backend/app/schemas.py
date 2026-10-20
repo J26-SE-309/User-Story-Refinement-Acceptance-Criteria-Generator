@@ -9,10 +9,12 @@ from pydantic import BaseModel, Field
 
 
 class RefinementRequest(BaseModel):
-    requirement_id: str
+    requirement_id: str = Field(min_length=1, max_length=200)
     project_id: str | None = None
     validated_requirement: str = Field(min_length=1)
     context_reference: str | None = Field(default=None, description="Project-context package to retrieve from")
+    project_context: str | None = Field(default=None, max_length=10_000)
+    user_role: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class ProjectCreate(BaseModel):
@@ -102,10 +104,31 @@ class ExistingStoryUpdate(BaseModel):
 
 
 class AcceptanceCriterion(BaseModel):
-    id: str
-    given: str
-    when: str
-    then: str
+    id: str = Field(min_length=1)
+    given: str = Field(min_length=1)
+    when: str = Field(min_length=1)
+    then: str = Field(min_length=1)
+
+
+class QualityFinding(BaseModel):
+    code: str
+    message: str
+    field: str | None = None
+
+
+class QualityValidationRequest(BaseModel):
+    user_story: str = Field(min_length=1)
+    acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
+    requirement_text: str | None = Field(default=None, min_length=1)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class QualityValidationResponse(BaseModel):
+    valid: bool
+    requires_human_review: bool = True
+    errors: list[QualityFinding]
+    warnings: list[QualityFinding]
+    checks: dict[str, bool]
 
 
 class CandidateResponse(BaseModel):
@@ -158,7 +181,11 @@ class RefinedStory(BaseModel):
     refinement_id: int | None = Field(default=None, gt=0)
     requirement_id: str
     story_id: str
+    story_title: str | None = None
     user_story: str
+    user_role: str | None = None
+    goal: str | None = None
+    benefit: str | None = None
     acceptance_criteria: list[AcceptanceCriterion]
     quality_scores: QualityScores
     unsupported_assumptions: list[str] = []

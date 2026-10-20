@@ -83,15 +83,51 @@ silently overwritten.
 
 ### API contract
 
-Until the models are in place, the endpoints return placeholder results marked `model_version: "stub"`, so the
-gateway and frontend can already be built against the real request and response shapes. The shared JSON
-Schemas live in [`Synapse-Web/contracts/story-refinement`](https://github.com/J26-SE-309/Synapse-Web/tree/main/contracts/story-refinement);
+The baseline endpoints are available under `/api/v1/requirements/generate` and
+`/api/v1/requirements/validate`. The baseline is deterministic and marked
+`model_version: "deterministic-baseline"`; it always requires human review.
+`/api/v1/story-refinement/generate` runs the optional Ollama-backed local model
+and persists ranked candidates. Model failures are returned as explicit API
+errors rather than silently falling back to a fabricated result.
+
+The shared JSON Schemas live in
+[`Synapse-Web/contracts/story-refinement`](https://github.com/J26-SE-309/Synapse-Web/tree/main/contracts/story-refinement);
 keep them in sync with `backend/app/schemas.py`.
+
+### Configuration and integration
+
+Copy `backend/.env.example` to `backend/.env`. Set `CORS_ORIGINS` to the
+Synapse-Web origin(s), `STORY_LLM_BASE_URL` and `STORY_LLM_MODEL` for Ollama,
+and `STORY_DATA_DIR` to the external `AgilePlatform/Datasets/story-refinement/` folder.
+No API keys are required by this service. The frontend should send the
+validated requirement from Component 1, its `requirement_id`, `project_id`,
+optional role, and context to `/api/v1/requirements/generate`.
+
+### Dataset preparation
+
+The dataset schema is: `record_id`, `requirement_text`, `project_context`,
+`role`, `target_user_story`, `acceptance_criteria` (a list of `{given, when,
+then}` objects), `assumptions`, `source_metadata`, and optional
+`annotation_status`. Use JSONL or CSV input:
+
+```powershell
+..\.venv\Scripts\python scripts/prepare_dataset.py `
+  --input ..\Datasets\story-refinement\raw\Story_Refinement_Local_Optimization_500_Records.xlsx `
+  --output-dir ..\Datasets\story-refinement\processed
+```
+
+The script writes `quality_report.json`, `provenance.json`, and
+reviewed-only `train.jsonl`, `validation.jsonl`, and `test.jsonl`. The included
+500-record workbook is synthetic and marked “Needs human review”; it is
+processed for pipeline testing but excluded from training splits. It is not
+research evidence or a sufficient training dataset. Add only legally usable
+public or human-reviewed examples with source and consent/licensing metadata.
 
 ### Data and models
 
-Datasets and trained models are never committed. Keep them in `AgilePlatform/Datasets/story-refinement/`, next to the
-repositories (see [`ml-engine/README.md`](ml-engine/README.md)).
+Datasets and trained models are never committed. Keep them in
+`AgilePlatform/Datasets/story-refinement/`, next to the repositories (see
+[`ml-engine/README.md`](ml-engine/README.md)).
 
 ## Synapse Platform Services
 

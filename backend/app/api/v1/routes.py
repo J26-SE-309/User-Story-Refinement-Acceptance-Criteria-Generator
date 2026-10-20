@@ -5,7 +5,6 @@ endpoint returns a placeholder story (model_version "stub") so the gateway and f
 can be built against the real contract.
 """
 
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app import db
 from app.models import ExistingStory, Project
+from app.quality import validate_story_quality
 from app.repositories import (
     add_context_entry,
     create_existing_story,
@@ -35,13 +35,13 @@ from app.schemas import (
     ExistingStoryCreate,
     ExistingStoryResponse,
     ExistingStoryUpdate,
-    InvestFlags,
     ProjectContextCreate,
     ProjectContextResponse,
     ProjectContextUpdate,
     ProjectCreate,
     ProjectResponse,
-    QualityScores,
+    QualityValidationRequest,
+    QualityValidationResponse,
     RefinedStory,
     RefinementRequest,
     RetrievedContextResponse,
@@ -50,8 +50,20 @@ from app.schemas import (
     StoryRefinementGenerateRequest,
     StoryRefinementGenerateResponse,
 )
+from app.services.generation import generate_baseline
 
 router = APIRouter(tags=["user story refinement"])
+
+
+@router.post("/requirements/validate", response_model=QualityValidationResponse)
+def validate_requirement_output(request: QualityValidationRequest) -> QualityValidationResponse:
+    """Run structural checks; semantic correctness still requires human review."""
+    return validate_story_quality(
+        request.user_story,
+        request.acceptance_criteria,
+        request.requirement_text,
+        request.assumptions,
+    )
 
 
 @router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -396,32 +408,11 @@ def review_story_refinement(
     )
 
 
+@router.post("/requirements/generate", response_model=RefinedStory)
 @router.post("/refine", response_model=RefinedStory)
 def refine(request: RefinementRequest, session: Annotated[Session, Depends(db.get_session)]) -> RefinedStory:
-    """Turn one validated requirement into a user story with acceptance criteria and quality scores."""
-    started = time.perf_counter()
-    no_flags = InvestFlags(
-        independent=False, negotiable=False, valuable=False, estimable=False, small=False, testable=False
-    )
-    result = RefinedStory(
-        requirement_id=request.requirement_id,
-        story_id=f"{request.requirement_id}-S1",
-        user_story=f"Placeholder story for: {request.validated_requirement}",
-        acceptance_criteria=[
-            AcceptanceCriterion(id="AC1", given="(placeholder)", when="(placeholder)", then="(placeholder)")
-        ],
-        quality_scores=QualityScores(
-            invest=no_flags,
-            invest_score=0,
-            completeness=0,
-            clarity=0,
-            testability=0,
-            consistency=0,
-            context_relevance=0,
-        ),
-        processing_time_ms=int((time.perf_counter() - started) * 1000),
-        model_metadata={"model_version": "stub"},
-    )
+    """Turn one validated requirement into a reviewable baseline story."""
+    result = generate_baseline(request)
     try:
         run = persist_refinement(session, request, result)
     except SQLAlchemyError as exc:
