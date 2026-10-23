@@ -24,6 +24,9 @@ User-Story-Refinement-Acceptance-Criteria-Generator/
 │   ├── tests/
 │   └── Dockerfile
 ├── ml-engine/           # research code: datasets, training, evaluation (package `story_ml`)
+│   ├── config/           # safe-to-commit training configuration examples
+│   └── src/story_ml/     # inference, retrieval, evaluation and optional LoRA training
+├── scripts/              # dataset, training and evaluation command-line tools
 └── docker-compose.yml   # this service and its database
 ```
 
@@ -67,17 +70,146 @@ This component has its own PostgreSQL database and account. No other component c
 | Database | `story_db` |
 | User / password | `story_user` / `story-local` |
 
+The backend owns additive refinement-storage tables managed by Alembic. Apply them only after
+confirming the live `story_db` catalog is free of those table names:
+
+```powershell
+cd backend
+..\.venv\Scripts\alembic upgrade head
+```
+
+The migration creates project context, validated requirement, existing-story, generation,
+candidate, evaluation, context-reference, and review-decision tables. It does not drop or
+alter existing tables or delete existing records. The migration intentionally stops if any
+target table already exists outside Alembic so an existing database cannot be duplicated or
+silently overwritten.
+
 ### API contract
 
-Until the models are in place, the endpoints return placeholder results marked `model_version: "stub"`, so the
-gateway and frontend can already be built against the real request and response shapes. The shared JSON
-Schemas live in [`Synapse-Web/contracts/story-refinement`](https://github.com/J26-SE-309/Synapse-Web/tree/main/contracts/story-refinement);
+The baseline endpoints are available under `/api/v1/requirements/generate` and
+`/api/v1/requirements/validate`. The baseline is deterministic and marked
+`model_version: "deterministic-baseline"`; it always requires human review.
+`/api/v1/story-refinement/generate` runs the optional Ollama-backed local model
+and persists ranked candidates. Model failures are returned as explicit API
+errors rather than silently falling back to a fabricated result.
+
+The shared JSON Schemas live in
+[`Synapse-Web/contracts/story-refinement`](https://github.com/J26-SE-309/Synapse-Web/tree/main/contracts/story-refinement);
 keep them in sync with `backend/app/schemas.py`.
+
+Additional backend endpoints include:
+
+- `GET /api/v1/stories/{story_id}` and `PUT /api/v1/stories/{story_id}` for retrieval and editing.
+- `POST /api/v1/story-refinement/{generation_id}/review` for approval, rejection, or change requests.
+- `GET /api/v1/datasets/status` and `GET /api/v1/models/status` for operational status.
+
+### Configuration and integration
+
+Copy `backend/.env.example` to `backend/.env`. Set `CORS_ORIGINS` to the
+Synapse-Web origin(s), `STORY_LLM_BASE_URL` and `STORY_LLM_MODEL` for Ollama,
+and `STORY_DATA_DIR` to the external `AgilePlatform/Datasets/story-refinement/` folder.
+No API keys are required by this service. The frontend should send the
+validated requirement from Component 1, its `requirement_id`, `project_id`,
+optional role, and context to `/api/v1/requirements/generate`.
+
+### Dataset preparation
+
+The dataset schema is: `record_id`, `requirement_text`, `project_context`,
+`role`, `target_user_story`, `acceptance_criteria` (a list of `{given, when,
+then}` objects), `assumptions`, `source_metadata`, and optional
+`annotation_status`. Use JSONL or CSV input:
+
+```powershell
+..\.venv\Scripts\python scripts/prepare_dataset.py `
+  --input ..\Datasets\story-refinement\raw\Story_Refinement_Local_Optimization_500_Records.xlsx `
+  --output-dir ..\Datasets\story-refinement\processed
+```
+
+The script writes `quality_report.json`, `provenance.json`, and
+reviewed-only `train.jsonl`, `validation.jsonl`, and `test.jsonl`. The included
+500-record workbook is synthetic and marked “Needs human review”; it is
+processed for pipeline testing but excluded from training splits. It is not
+research evidence or a sufficient training dataset. Add only legally usable
+public or human-reviewed examples with source and consent/licensing metadata.
+
+The complete external layout is:
+
+```text
+Datasets/story-refinement/
+├── raw/          # supplied workbooks, CSV and JSONL; never committed
+├── processed/    # normalized records and quality reports
+├── splits/       # train.jsonl, validation.jsonl and test.jsonl
+├── models/       # final model or adapter artifacts
+├── checkpoints/  # resumable training checkpoints
+├── evaluation/   # experiment CSV results
+└── logs/         # training and inference logs
+```
+
+### Optional fine-tuning
+
+Fine-tuning is intentionally controlled and does not run from a public API
+endpoint. Install the optional dependencies only when reviewed data and
+suitable hardware are available:
+
+```powershell
+..\.venv\Scripts\python -m pip install -e "ml-engine[training]"
+..\.venv\Scripts\python scripts/train_model.py `
+  --config ml-engine/config/training.example.json --check-only
+```
+
+The readiness check blocks training when reviewed train/validation examples,
+licence confirmation, or hardware configuration are missing. Review the
+configuration and explicitly add `--confirm` before any training run:
+
+```powershell
+..\.venv\Scripts\python scripts/train_model.py `
+  --config ml-engine/config/training.example.json --confirm
+```
+
+The default Qwen 0.5B instruct model is a small baseline choice; verify its
+licence and hardware suitability before use. CPU training is disabled by
+default and, if enabled, is only suitable for a small experiment. No model
+has been trained by this repository yet.
+
+### Research evaluation
+
+Create a JSONL prediction file containing reference fields plus
+`predicted_user_story`, `predicted_acceptance_criteria`, optional
+`predicted_assumptions`, and optional `latency_ms`, then run:
+
+```powershell
+..\.venv\Scripts\python scripts/evaluate_generation.py `
+  --input ..\Datasets\story-refinement\splits\test_predictions.jsonl `
+  --output ..\Datasets\story-refinement\evaluation\structured-prompt.csv
+```
+
+The evaluator reports structural validity, criteria completeness,
+unsupported-assumption count, human-review status, and latency where supplied.
+Automatic metrics do not prove semantic faithfulness; compare the same held-out
+reviewed examples across baseline, structured prompting, and fine-tuned runs,
+then add human reviewer ratings.
+
+### Frontend integration
+
+The existing Synapse-Web refinement workspace remains the UI. It can use the
+FastAPI service through the gateway by setting this in
+`Synapse-Web/.env.local`:
+
+```text
+NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+NEXT_PUBLIC_STORY_REFINEMENT_API=true
+```
+
+With the flag enabled, the current workspace sends validated requirements to
+`/api/v1/story-refinement/refine`, displays the returned story and criteria,
+and retains the existing editing and review screens. The default remains
+`false` so prototype tests and offline demonstrations are not disrupted.
 
 ### Data and models
 
-Datasets and trained models are never committed. Keep them in `AgilePlatform/Datasets/story-refinement/`, next to the
-repositories (see [`ml-engine/README.md`](ml-engine/README.md)).
+Datasets and trained models are never committed. Keep them in
+`AgilePlatform/Datasets/story-refinement/`, next to the repositories (see
+[`ml-engine/README.md`](ml-engine/README.md)).
 
 ## Synapse Platform Services
 
