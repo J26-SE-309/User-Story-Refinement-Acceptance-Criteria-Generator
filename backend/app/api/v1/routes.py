@@ -474,8 +474,10 @@ def review_story_refinement(
 
 
 @router.post("/requirements/generate", response_model=RefinedStory)
-@router.post("/refine", response_model=RefinedStory)
-def refine(request: RefinementRequest, session: Annotated[Session, Depends(db.get_session)]) -> RefinedStory:
+def generate_requirement(
+    request: RefinementRequest,
+    session: Annotated[Session, Depends(db.get_session)],
+) -> RefinedStory:
     """Turn one validated requirement into a reviewable baseline story."""
     result = generate_baseline(request)
     try:
@@ -487,6 +489,20 @@ def refine(request: RefinementRequest, session: Annotated[Session, Depends(db.ge
             detail="The refinement result could not be persisted.",
         ) from exc
     return result.model_copy(update={"refinement_id": run.id})
+
+
+@router.post("/refine", response_model=str)
+def refine(request: RefinementRequest) -> str:
+    """Generate raw model output for one validated requirement."""
+    try:
+        from app.services.story_model import generate_refinement
+
+        return generate_refinement(request.validated_requirement)
+    except (ImportError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Story refinement model unavailable.",
+        ) from exc
 
 
 @router.post("/refinements/{run_id}/review", response_model=ReviewDecisionRequest)
