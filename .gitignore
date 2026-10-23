@@ -55,3 +55,8 @@ mlruns/
 !.vscode/tasks.json
 .DS_Store
 Thumbs.db
+
+
+models/
+*.safetensors
+*.bin
