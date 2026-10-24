@@ -24,6 +24,9 @@ def test_session_factory():
 @pytest.fixture
 def client(monkeypatch, test_session_factory):
     monkeypatch.setattr(db, "database_ok", lambda: False)
+    # Keep API persistence/contract tests independent of heavyweight model files.
+    from app.services.generation import generate_baseline
+    monkeypatch.setattr("app.services.story_model.generate_refinement", generate_baseline)
     app = create_app()
 
     def override_session():

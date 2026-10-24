@@ -15,6 +15,11 @@ class RefinementRequest(BaseModel):
     context_reference: str | None = Field(default=None, description="Project-context package to retrieve from")
     project_context: str | None = Field(default=None, max_length=10_000)
     user_role: str | None = Field(default=None, min_length=1, max_length=200)
+    feature_module: str | None = Field(default=None, max_length=500)
+    business_goal: str | None = Field(default=None, max_length=2_000)
+    related_requirements: str | None = Field(default=None, max_length=5_000)
+    existing_system_context: str | None = Field(default=None, max_length=10_000)
+    additional_constraints: str | None = Field(default=None, max_length=5_000)
 
 
 class ProjectCreate(BaseModel):

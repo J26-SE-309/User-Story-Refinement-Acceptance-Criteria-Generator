@@ -107,7 +107,11 @@ Additional backend endpoints include:
 
 Copy `backend/.env.example` to `backend/.env`. Set `CORS_ORIGINS` to the
 Synapse-Web origin(s), `STORY_LLM_BASE_URL` and `STORY_LLM_MODEL` for Ollama,
-and `STORY_DATA_DIR` to the external `AgilePlatform/Datasets/story-refinement/` folder.
+`STORY_MODEL_PATH` to the local fine-tuned T5 artifact (by default
+`../../models/story-refinement-model`), and `STORY_DATA_DIR` to the external
+`AgilePlatform/Datasets/story-refinement/` folder. The model endpoint loads the
+configured artifact once on first use, uses CPU when CUDA is unavailable, and
+returns an explicit 503 when the artifact is missing or cannot be loaded.
 No API keys are required by this service. The frontend should send the
 validated requirement from Component 1, its `requirement_id`, `project_id`,
 optional role, and context to `/api/v1/requirements/generate`.

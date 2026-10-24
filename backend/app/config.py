@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     story_generation_mode: str = "baseline"
     story_data_dir: str = "../../Datasets/story-refinement"
+    story_model_path: str = "../../models/story-refinement-model"
+    story_model_device: str = "auto"
 
 
 @lru_cache

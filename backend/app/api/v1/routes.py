@@ -1,6 +1,5 @@
 """Version 1 of the refinement API."""
 
-import os
 from pathlib import Path
 from typing import Annotated
 
@@ -53,6 +52,7 @@ from app.schemas import (
     StoryUpdateRequest,
 )
 from app.services.generation import generate_baseline
+from app.services.story_model import InvalidModelOutputError, ModelUnavailableError, generate_refinement
 
 router = APIRouter(tags=["user story refinement"])
 
@@ -77,15 +77,14 @@ def dataset_status() -> StoryStatusResponse:
 
 @router.get("/models/status", response_model=StoryStatusResponse)
 def model_status() -> StoryStatusResponse:
-    settings = get_settings()
+    from app.services.story_model import status
+
+    available, message, details = status()
     return StoryStatusResponse(
         story_id="model",
-        available=True,
-        message="Configured baseline inference is available; fine-tuning is optional.",
-        details={
-            "generation_mode": settings.story_generation_mode,
-            "ollama_model": os.environ.get("STORY_LLM_MODEL", "llama3.2"),
-        },
+        available=available,
+        message=message,
+        details={**details, "generation_mode": get_settings().story_generation_mode},
     )
 
 
@@ -491,18 +490,28 @@ def generate_requirement(
     return result.model_copy(update={"refinement_id": run.id})
 
 
-@router.post("/refine", response_model=str)
-def refine(request: RefinementRequest) -> str:
-    """Generate raw model output for one validated requirement."""
+@router.post("/refine", response_model=RefinedStory)
+def refine(
+    request: RefinementRequest,
+    session: Annotated[Session, Depends(db.get_session)],
+) -> RefinedStory:
+    """Generate and persist one structured refinement from the configured model."""
     try:
-        from app.services.story_model import generate_refinement
-
-        return generate_refinement(request.validated_requirement)
-    except (ImportError, OSError) as exc:
+        result = generate_refinement(request)
+        run = persist_refinement(session, request, result)
+        return result.model_copy(update={"refinement_id": run.id})
+    except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Story refinement model unavailable.",
+            detail=str(exc),
         ) from exc
+    except InvalidModelOutputError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Model inference failed: {exc}") from exc
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Refinement persistence failed.") from exc
 
 
 @router.post("/refinements/{run_id}/review", response_model=ReviewDecisionRequest)
