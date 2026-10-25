@@ -1,9 +1,11 @@
 """SQLAlchemy models owned by the story-refinement component."""
 
 from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import Uuid
 
 from app.db import Base
 
@@ -116,7 +118,7 @@ class RefinementRun(Base):
     __tablename__ = "refinement_runs"
     __table_args__ = (Index("ix_refinement_run_requirement_created", "requirement_id", "created_at"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     requirement_id: Mapped[str] = mapped_column(ForeignKey("validated_requirements.id", ondelete="RESTRICT"))
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("refinement_projects.id", ondelete="SET NULL"), nullable=True
@@ -143,7 +145,7 @@ class RefinementContextReference(Base):
     __table_args__ = (Index("ix_refinement_context_run", "run_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("refinement_runs.id", ondelete="CASCADE"))
+    run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("refinement_runs.id", ondelete="CASCADE"))
     context_entry_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_context_entries.id", ondelete="SET NULL"), nullable=True
     )
@@ -157,7 +159,7 @@ class StoryCandidate(Base):
     __table_args__ = (Index("ix_candidate_run_rank", "run_id", "rank"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("refinement_runs.id", ondelete="CASCADE"))
+    run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("refinement_runs.id", ondelete="CASCADE"))
     story_id: Mapped[str] = mapped_column(String(200))
     user_story: Mapped[str] = mapped_column(Text)
     original_user_story: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -203,7 +205,7 @@ class ReviewDecision(Base):
     __table_args__ = (Index("ix_review_run_created", "run_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("refinement_runs.id", ondelete="CASCADE"))
+    run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("refinement_runs.id", ondelete="CASCADE"))
     candidate_id: Mapped[int | None] = mapped_column(
         ForeignKey("story_candidates.id", ondelete="SET NULL"), nullable=True
     )

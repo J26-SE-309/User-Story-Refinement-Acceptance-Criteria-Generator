@@ -4,6 +4,7 @@ They mirror the JSON Schemas in Synapse-Web/contracts/story-refinement; change b
 """
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -204,7 +205,7 @@ class QualityScores(BaseModel):
 
 
 class RefinedStory(BaseModel):
-    refinement_id: int | None = Field(default=None, gt=0)
+    refinement_id: UUID | None = None
     requirement_id: str
     story_id: str
     story_title: str | None = None

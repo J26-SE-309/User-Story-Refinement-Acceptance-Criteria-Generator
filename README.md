@@ -157,7 +157,9 @@ Additional backend endpoints include:
 - `POST /api/v1/story-refinement/{generation_id}/review` for approval, rejection, or change requests.
 - `GET /api/v1/datasets/status` and `GET /api/v1/models/status` for operational status.
 - `GET /api/v1/requirements` and `GET /api/v1/requirements/{requirement_id}` for validated
-  requirement selection.
+  requirement selection. `GET /` is a simple service liveness response; `/health`,
+  `/docs`, and `/openapi.json` are also available at the server root. Refinement run IDs
+  are UUIDs.
 
 ### Configuration and integration
 

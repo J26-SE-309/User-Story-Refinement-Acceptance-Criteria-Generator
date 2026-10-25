@@ -16,6 +16,11 @@ class HealthResponse(BaseModel):
     database: Literal["ok", "unavailable"]
 
 
+@router.get("/")
+def root() -> dict[str, str]:
+    return {"message": "User Story Refinement API is running."}
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Liveness check used by the gateway and docker compose."""

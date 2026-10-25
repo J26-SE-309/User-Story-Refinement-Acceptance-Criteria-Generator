@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -551,7 +552,7 @@ def refine(
 
 @router.post("/refinements/{run_id}/review", response_model=ReviewDecisionRequest)
 def review(
-    run_id: int,
+    run_id: UUID,
     request: ReviewDecisionRequest,
     session: Annotated[Session, Depends(db.get_session)],
 ) -> ReviewDecisionRequest:

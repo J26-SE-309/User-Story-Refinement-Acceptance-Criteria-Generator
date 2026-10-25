@@ -1,5 +1,7 @@
 """Transactional persistence operations for refinement requests."""
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -139,7 +141,7 @@ def add_context_entry(session: Session, project_id: str, request: ProjectContext
     return entry
 
 
-def record_review(session: Session, run_id: int, request: ReviewDecisionRequest) -> ReviewDecision:
+def record_review(session: Session, run_id: UUID, request: ReviewDecisionRequest) -> ReviewDecision:
     with session.begin():
         run = session.get(RefinementRun, run_id)
         if run is None:
@@ -154,7 +156,7 @@ def record_review(session: Session, run_id: int, request: ReviewDecisionRequest)
     return decision
 
 
-def get_refinement(session: Session, run_id: int) -> RefinementRun | None:
+def get_refinement(session: Session, run_id: UUID) -> RefinementRun | None:
     return session.scalar(
         select(RefinementRun)
         .options(

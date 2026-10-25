@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -94,7 +95,7 @@ def upgrade() -> None:
     )
     op.create_table(
         "refinement_runs",
-        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
             "requirement_id",
             sa.String(200),
@@ -115,7 +116,12 @@ def upgrade() -> None:
     op.create_table(
         "refinement_context_references",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("run_id", sa.Integer(), sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "run_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column(
             "context_entry_id",
             sa.Integer(),
@@ -129,7 +135,12 @@ def upgrade() -> None:
     op.create_table(
         "story_candidates",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("run_id", sa.Integer(), sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "run_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("story_id", sa.String(200), nullable=False),
         sa.Column("user_story", sa.Text(), nullable=False),
         sa.Column("rank", sa.Integer(), nullable=False),
@@ -166,7 +177,12 @@ def upgrade() -> None:
     op.create_table(
         "review_decisions",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("run_id", sa.Integer(), sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "run_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column(
             "candidate_id", sa.Integer(), sa.ForeignKey("story_candidates.id", ondelete="SET NULL"), nullable=True
         ),

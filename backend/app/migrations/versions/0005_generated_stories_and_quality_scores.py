@@ -1,7 +1,6 @@
 """Add generated story and quality score storage.
 
-The existing refinement schema uses integer run IDs, so the new tables retain
-that relationship while using UUID IDs for generated stories and scores.
+Refinement runs use UUID IDs, so generated stories retain that relationship.
 """
 
 from collections.abc import Sequence
@@ -34,7 +33,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
             "run_id",
-            sa.Integer(),
+            postgresql.UUID(as_uuid=True),
             sa.ForeignKey("refinement_runs.id", ondelete="CASCADE"),
             nullable=False,
         ),
