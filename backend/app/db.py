@@ -22,6 +22,11 @@ def get_session() -> Iterator[Session]:
         yield session
 
 
+def get_db() -> Iterator[Session]:
+    """Compatibility dependency: one database session per request."""
+    yield from get_session()
+
+
 def init_models() -> None:
     """Create tables only for local development and isolated test databases.
 
