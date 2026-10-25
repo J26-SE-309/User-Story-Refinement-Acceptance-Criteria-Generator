@@ -98,12 +98,36 @@ cd backend
   --input ..\..\Datasets\story-refinement\raw\Story_Refinement_Local_Optimization_500_Records.xlsx `
   --dry-run
 ..\.venv\Scripts\python scripts\import_requirements.py `
-  --input ..\..\Datasets\story-refinement\processed\requirements.csv
+  --input ..\..\Datasets\story-refinement\raw\Story_Refinement_Local_Optimization_500_Records.xlsx
 ```
 
-Reviewers can approve imported rows by setting `validation_status` to `validated` in the
-component database. Only those rows are returned by `GET /api/v1/requirements` and accepted
-by `POST /api/v1/refine`. The refinement endpoint accepts
+The default input is the workbook path shown above when run from `backend/`; use
+`--input` for another `.xlsx` or `.csv` file. The importer reads the
+`Requirements_500` worksheet and maps `requirement_id`, `project_id`, `domain`,
+`validated_requirement`, `context_text`, and `context_id`. Synthetic reference stories
+and acceptance criteria are not used as requirement text. `--dry-run` validates without
+writing. A normal run inserts new rows as `pending_review`, skips existing IDs, reports
+duplicates and invalid rows, and never downgrades or overwrites existing records.
+
+There is no unauthenticated approval endpoint. An authorized database administrator or
+controlled local reviewer can approve a row after review:
+
+```sql
+UPDATE validated_requirements
+SET validation_status = 'validated', updated_at = NOW()
+WHERE id = 'REQ-0001' AND validation_status = 'pending_review';
+```
+
+Only approved rows are returned by `GET /api/v1/requirements` and accepted by
+`POST /api/v1/refine`. Verify imported records in PostgreSQL with:
+
+```sql
+SELECT id, project_id, domain, validation_status
+FROM validated_requirements
+ORDER BY created_at DESC;
+```
+
+The refinement endpoint accepts
 `{"requirement_id":"REQ-0001"}` and returns `404` for missing or unapproved records.
 For example:
 

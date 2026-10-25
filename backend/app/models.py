@@ -212,3 +212,20 @@ class ReviewDecision(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     run: Mapped[RefinementRun] = relationship(back_populates="reviews")
+
+
+class RefinementResult(Base):
+    __tablename__ = "refinement_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    requirement_id: Mapped[str] = mapped_column(
+        ForeignKey("validated_requirements.id"),
+        index=True,
+    )
+    user_story: Mapped[str] = mapped_column(Text)
+    acceptance_criteria: Mapped[list] = mapped_column(JSON)
+    quality_scores: Mapped[dict] = mapped_column(JSON)
+    unsupported_assumptions: Mapped[list] = mapped_column(JSON, default=list)
+    model_version: Mapped[str] = mapped_column(String(100), default="not-configured")
+    processing_time_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -22,7 +22,6 @@ from app.repositories import (
     get_validated_requirement,
     list_context_entries,
     list_existing_stories,
-    list_validated_requirements,
     persist_engine_result,
     persist_refinement,
     record_review,
@@ -52,7 +51,6 @@ from app.schemas import (
     StoryRefinementGenerateResponse,
     StoryStatusResponse,
     StoryUpdateRequest,
-    ValidatedRequirementResponse,
 )
 from app.services.generation import generate_baseline
 from app.services.story_model import (
@@ -62,51 +60,6 @@ from app.services.story_model import (
 )
 
 router = APIRouter(tags=["user story refinement"])
-
-
-def _validated_requirement_response(requirement) -> ValidatedRequirementResponse:
-    return ValidatedRequirementResponse(
-        requirement_id=requirement.id,
-        project_id=requirement.project_id,
-        domain=requirement.domain,
-        validated_requirement=requirement.text,
-        context_text=requirement.context_text,
-        created_at=requirement.created_at.isoformat(),
-    )
-
-
-@router.get("/requirements", response_model=list[ValidatedRequirementResponse])
-def list_requirements(
-    session: Annotated[Session, Depends(db.get_session)],
-    project_id: str | None = None,
-) -> list[ValidatedRequirementResponse]:
-    try:
-        return [
-            _validated_requirement_response(requirement)
-            for requirement in list_validated_requirements(session, project_id)
-        ]
-    except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Requirements are temporarily unavailable.",
-        ) from exc
-
-
-@router.get("/requirements/{requirement_id}", response_model=ValidatedRequirementResponse)
-def get_requirement(
-    requirement_id: str,
-    session: Annotated[Session, Depends(db.get_session)],
-) -> ValidatedRequirementResponse:
-    try:
-        requirement = get_validated_requirement(session, requirement_id)
-    except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Requirement lookup failed.",
-        ) from exc
-    if requirement is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validated requirement not found.")
-    return _validated_requirement_response(requirement)
 
 
 @router.get("/datasets/status", response_model=StoryStatusResponse)
