@@ -445,15 +445,17 @@ def generate_refinement(request: RefinementRequest) -> RefinedStory:
             do_sample=False,
         )
 
+   
     raw = tokenizer.decode(
         generated[0],
         skip_special_tokens=True,
     )
+
     print("\n--- STORY MODEL DEBUG ---")
+    print("Model directory:", model_path())
+    print("Decoded output:", repr(raw))
     print("Output token count:", len(generated[0]))
     print("--- END STORY MODEL DEBUG ---\n")
-     print("Model directory:", model_path())
-    print("Decoded output:", repr(raw))
 
     story, criteria, assumptions = _parse_output(raw, request)
 

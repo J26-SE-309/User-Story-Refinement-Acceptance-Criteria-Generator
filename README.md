@@ -84,6 +84,36 @@ alter existing tables or delete existing records. The migration intentionally st
 target table already exists outside Alembic so an existing database cannot be duplicated or
 silently overwritten.
 
+The database settings are read from `DATABASE_URL`; copy `backend/.env.example` to
+`backend/.env` and set the password through the environment rather than committing it.
+The default local Compose service uses `story_db` on `localhost:5442` and the API listens
+on `localhost:8002`. The current schema reuses the component-owned refinement history
+tables: `refinement_runs` and its candidates preserve every generated result, while
+`validated_requirements` stores the selectable source records. Dataset imports are never
+approved automatically:
+
+```powershell
+cd backend
+..\.venv\Scripts\python scripts\import_requirements.py `
+  --input ..\..\Datasets\story-refinement\raw\Story_Refinement_Local_Optimization_500_Records.xlsx `
+  --dry-run
+..\.venv\Scripts\python scripts\import_requirements.py `
+  --input ..\..\Datasets\story-refinement\processed\requirements.csv
+```
+
+Reviewers can approve imported rows by setting `validation_status` to `validated` in the
+component database. Only those rows are returned by `GET /api/v1/requirements` and accepted
+by `POST /api/v1/refine`. The refinement endpoint accepts
+`{"requirement_id":"REQ-0001"}` and returns `404` for missing or unapproved records.
+For example:
+
+```powershell
+curl http://localhost:8002/api/v1/requirements?project_id=PROJECT-1
+curl -X POST http://localhost:8002/api/v1/refine `
+  -H "Content-Type: application/json" `
+  -d '{"requirement_id":"REQ-0001"}'
+```
+
 ### API contract
 
 The baseline endpoints are available under `/api/v1/requirements/generate` and
@@ -102,6 +132,8 @@ Additional backend endpoints include:
 - `GET /api/v1/stories/{story_id}` and `PUT /api/v1/stories/{story_id}` for retrieval and editing.
 - `POST /api/v1/story-refinement/{generation_id}/review` for approval, rejection, or change requests.
 - `GET /api/v1/datasets/status` and `GET /api/v1/models/status` for operational status.
+- `GET /api/v1/requirements` and `GET /api/v1/requirements/{requirement_id}` for validated
+  requirement selection.
 
 ### Configuration and integration
 

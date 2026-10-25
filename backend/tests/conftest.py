@@ -17,6 +17,18 @@ def test_session_factory():
     )
     models.Base.metadata.create_all(test_engine)
     test_session = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
+    with test_session() as session:
+        session.add_all(
+            [
+                models.ValidatedRequirement(
+                    id=requirement_id,
+                    text="A learner can book a tutor.",
+                    validation_status="validated",
+                )
+                for requirement_id in ("REQ-1", "REQ-EDIT", "REQ-2", "REQ-3")
+            ]
+        )
+        session.commit()
 
     return test_session
 
@@ -26,7 +38,7 @@ def client(monkeypatch, test_session_factory):
     monkeypatch.setattr(db, "database_ok", lambda: False)
     # Keep API persistence/contract tests independent of heavyweight model files.
     from app.services.generation import generate_baseline
-    monkeypatch.setattr("app.services.story_model.generate_refinement", generate_baseline)
+    monkeypatch.setattr("app.api.v1.routes.generate_refinement", generate_baseline)
     app = create_app()
 
     def override_session():

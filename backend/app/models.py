@@ -60,13 +60,27 @@ class ValidatedRequirement(Base):
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("refinement_projects.id", ondelete="SET NULL"), nullable=True
     )
+    domain: Mapped[str | None] = mapped_column(String(200), nullable=True)
     text: Mapped[str] = mapped_column(Text)
-    validation_status: Mapped[str] = mapped_column(String(40), default="validated")
+    context_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validation_status: Mapped[str] = mapped_column(String(40), default="pending_review")
     source_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
     project: Mapped[Project | None] = relationship(back_populates="requirements")
     refinement_runs: Mapped[list["RefinementRun"]] = relationship(back_populates="requirement")
+
+    @property
+    def requirement_id(self) -> str:
+        return self.id
+
+    @property
+    def validated_requirement(self) -> str:
+        return self.text
+
+    @property
+    def status(self) -> str:
+        return self.validation_status
 
 
 class ExistingStory(Base):

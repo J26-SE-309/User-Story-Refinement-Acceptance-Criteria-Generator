@@ -102,6 +102,26 @@ def persist_refinement(session: Session, request: RefinementRequest, result: Ref
     return run
 
 
+def get_validated_requirement(session: Session, requirement_id: str) -> ValidatedRequirement | None:
+    return session.scalar(
+        select(ValidatedRequirement).where(
+            ValidatedRequirement.id == requirement_id,
+            ValidatedRequirement.validation_status == "validated",
+        )
+    )
+
+
+def list_validated_requirements(
+    session: Session, project_id: str | None = None
+) -> list[ValidatedRequirement]:
+    statement = select(ValidatedRequirement).where(
+        ValidatedRequirement.validation_status == "validated"
+    )
+    if project_id is not None:
+        statement = statement.where(ValidatedRequirement.project_id == project_id)
+    return list(session.scalars(statement.order_by(ValidatedRequirement.created_at, ValidatedRequirement.id)))
+
+
 def create_project(session: Session, request: ProjectCreate) -> Project:
     with session.begin():
         project = Project(**request.model_dump())

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class RefinementRequest(BaseModel):
     requirement_id: str = Field(min_length=1, max_length=200)
     project_id: str | None = None
-    validated_requirement: str = Field(min_length=1)
+    validated_requirement: str | None = Field(default=None, min_length=1)
     context_reference: str | None = Field(default=None, description="Project-context package to retrieve from")
     project_context: str | None = Field(default=None, max_length=10_000)
     user_role: str | None = Field(default=None, min_length=1, max_length=200)
@@ -20,6 +20,15 @@ class RefinementRequest(BaseModel):
     related_requirements: str | None = Field(default=None, max_length=5_000)
     existing_system_context: str | None = Field(default=None, max_length=10_000)
     additional_constraints: str | None = Field(default=None, max_length=5_000)
+
+
+class ValidatedRequirementResponse(BaseModel):
+    requirement_id: str
+    project_id: str | None
+    domain: str | None
+    validated_requirement: str
+    context_text: str | None
+    created_at: str
 
 
 class ProjectCreate(BaseModel):
