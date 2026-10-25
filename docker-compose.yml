@@ -24,8 +24,11 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://story_user:${STORY_DB_PASSWORD:-story-local}@story-db:5432/story_db
+      STORY_MODEL_PATH: models/story-refinement-model
     ports:
       - "127.0.0.1:8002:8002"
+    volumes:
+      - ./models/story-refinement-model:/service/models/story-refinement-model:ro
     depends_on:
       story-db:
         condition: service_healthy

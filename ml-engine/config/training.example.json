@@ -1,0 +1,14 @@
+{
+  "model_name": "google/flan-t5-small",
+  "data_dir": "../Datasets/story-refinement",
+  "output_dir": "../Datasets/story-refinement/models/story-refinement-lora",
+  "checkpoint_dir": "../Datasets/story-refinement/checkpoints",
+  "seed": 42,
+  "num_train_epochs": 1.0,
+  "learning_rate": 0.0002,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps": 8,
+  "max_length": 1024,
+  "allow_cpu": false,
+  "license_confirmed": false
+}

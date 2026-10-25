@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # This component's own database and account. No other component connects to it.
     database_url: str = "postgresql+psycopg://story_user:story-local@localhost:5442/story_db"
     cors_origins: list[str] = ["http://localhost:3000"]
+    story_generation_mode: str = "baseline"
+    story_model_device: str = "auto"
+    story_data_dir: str = "../../Datasets/story-refinement"
+    story_model_path: str = "models/story-refinement-model"
 
 
 @lru_cache
