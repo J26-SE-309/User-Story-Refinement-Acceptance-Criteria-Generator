@@ -108,7 +108,7 @@ Additional backend endpoints include:
 Copy `backend/.env.example` to `backend/.env`. Set `CORS_ORIGINS` to the
 Synapse-Web origin(s), `STORY_LLM_BASE_URL` and `STORY_LLM_MODEL` for Ollama,
 `STORY_MODEL_PATH` to the local fine-tuned T5 artifact (by default
-`../../models/story-refinement-model`), and `STORY_DATA_DIR` to the external
+`models/story-refinement-model`), and `STORY_DATA_DIR` to the external
 `AgilePlatform/Datasets/story-refinement/` folder. The model endpoint loads the
 configured artifact once on first use, uses CPU when CUDA is unavailable, and
 returns an explicit 503 when the artifact is missing or cannot be loaded.
@@ -119,8 +119,8 @@ optional role, and context to `/api/v1/requirements/generate`.
 ### Dataset preparation
 
 The dataset schema is: `record_id`, `requirement_text`, `project_context`,
-`role`, `target_user_story`, `acceptance_criteria` (a list of `{given, when,
-then}` objects), `assumptions`, `source_metadata`, and optional
+`role`, `target_user_story`, `acceptance_criteria` (a list of `{id, given,
+when, then}` objects), `assumptions`, `source_metadata`, and optional
 `annotation_status`. Use JSONL or CSV input:
 
 ```powershell
@@ -170,10 +170,14 @@ configuration and explicitly add `--confirm` before any training run:
   --config ml-engine/config/training.example.json --confirm
 ```
 
-The default Qwen 0.5B instruct model is a small baseline choice; verify its
-licence and hardware suitability before use. CPU training is disabled by
-default and, if enabled, is only suitable for a small experiment. No model
-has been trained by this repository yet.
+The default model is `google/flan-t5-small`, matching the backend's
+encoder-decoder inference path. Training uses the requirement fields as the
+input prompt and produces separate target labels in the exact API JSON
+contract: `user_story`, `acceptance_criteria`, and
+`unsupported_assumptions`. Verify the model licence and hardware suitability
+before use. CPU training is disabled by default and, if enabled, is only
+suitable for a small experiment. No model has been trained by this repository
+yet.
 
 ### Research evaluation
 
@@ -200,7 +204,7 @@ FastAPI service through the gateway by setting this in
 `Synapse-Web/.env.local`:
 
 ```text
-NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+NEXT_PUBLIC_GATEWAY_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_STORY_REFINEMENT_API=true
 ```
 

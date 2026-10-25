@@ -1,5 +1,5 @@
 {
-  "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+  "model_name": "google/flan-t5-small",
   "data_dir": "../Datasets/story-refinement",
   "output_dir": "../Datasets/story-refinement/models/story-refinement-lora",
   "checkpoint_dir": "../Datasets/story-refinement/checkpoints",

@@ -13,7 +13,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class TrainingConfig:
-    model_name: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    model_name: str = "google/flan-t5-small"
     data_dir: str = "../Datasets/story-refinement"
     output_dir: str = "../Datasets/story-refinement/models/story-refinement-lora"
     checkpoint_dir: str = "../Datasets/story-refinement/checkpoints"
@@ -77,7 +77,27 @@ def _prompt(record: dict[str, Any]) -> str:
         "### Role\n"
         f"{record['role']}\n"
         "### Expected JSON\n"
-        f"{json.dumps({'user_story': record['target_user_story'], 'acceptance_criteria': record['acceptance_criteria'], 'assumptions': record['assumptions']})}"
+        "Return JSON with exactly these top-level keys: "
+        "user_story, acceptance_criteria, unsupported_assumptions."
+    )
+
+
+def _target(record: dict[str, Any]) -> str:
+    return json.dumps(
+        {
+            "user_story": record["target_user_story"],
+            "acceptance_criteria": [
+                {
+                    "id": str(item.get("id") or f"AC{index}"),
+                    "given": item["given"],
+                    "when": item["when"],
+                    "then": item["then"],
+                }
+                for index, item in enumerate(record["acceptance_criteria"], start=1)
+            ],
+            "unsupported_assumptions": record["assumptions"],
+        },
+        ensure_ascii=True,
     )
 
 
@@ -91,9 +111,9 @@ def run_training(config: TrainingConfig, confirm: bool = False) -> dict[str, Any
         from datasets import load_dataset
         from peft import LoraConfig, get_peft_model
         from transformers import (
-            AutoModelForCausalLM,
+            AutoModelForSeq2SeqLM,
             AutoTokenizer,
-            DataCollatorForLanguageModeling,
+            DataCollatorForSeq2Seq,
             Trainer,
             TrainingArguments,
         )
@@ -112,7 +132,7 @@ def run_training(config: TrainingConfig, confirm: bool = False) -> dict[str, Any
         },
     )
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
-    model = AutoModelForCausalLM.from_pretrained(config.model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(config.model_name)
     model = get_peft_model(
         model,
         LoraConfig(
@@ -125,11 +145,25 @@ def run_training(config: TrainingConfig, confirm: bool = False) -> dict[str, Any
     )
 
     def tokenize(batch: dict[str, list[Any]]) -> dict[str, Any]:
-        prompts = [
+        records = [
             _prompt({key: batch[key][index] for key in batch})
             for index in range(len(batch["requirement_text"]))
         ]
-        return tokenizer(prompts, truncation=True, max_length=config.max_length)
+        targets = [
+            _target({key: batch[key][index] for key in batch})
+            for index in range(len(batch["requirement_text"]))
+        ]
+        model_inputs = tokenizer(
+            records,
+            truncation=True,
+            max_length=config.max_length,
+        )
+        model_inputs["labels"] = tokenizer(
+            text_target=targets,
+            truncation=True,
+            max_length=config.max_length,
+        )["input_ids"]
+        return model_inputs
 
     tokenized = dataset.map(tokenize, batched=True, remove_columns=dataset["train"].column_names)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +185,7 @@ def run_training(config: TrainingConfig, confirm: bool = False) -> dict[str, Any
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["validation"],
         tokenizer=tokenizer,
-        data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        data_collator=DataCollatorForSeq2Seq(tokenizer, model=model),
     )
     trainer.train()
     trainer.save_model(str(output_dir))

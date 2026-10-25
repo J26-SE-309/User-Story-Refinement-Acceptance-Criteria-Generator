@@ -52,7 +52,11 @@ from app.schemas import (
     StoryUpdateRequest,
 )
 from app.services.generation import generate_baseline
-from app.services.story_model import InvalidModelOutputError, ModelUnavailableError, generate_refinement
+from app.services.story_model import (
+    InvalidModelOutputError,
+    ModelUnavailableError,
+    generate_refinement,
+)
 
 router = APIRouter(tags=["user story refinement"])
 
@@ -495,11 +499,9 @@ def refine(
     request: RefinementRequest,
     session: Annotated[Session, Depends(db.get_session)],
 ) -> RefinedStory:
-    """Generate and persist one structured refinement from the configured model."""
+    """Generate and persist a refinement using the configured fine-tuned model."""
     try:
         result = generate_refinement(request)
-        run = persist_refinement(session, request, result)
-        return result.model_copy(update={"refinement_id": run.id})
     except ModelUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -507,8 +509,17 @@ def refine(
         ) from exc
     except InvalidModelOutputError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    except RuntimeError as exc:
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The refinement request or model configuration is invalid.",
+        ) from exc
+    except (RuntimeError, OSError) as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Model inference failed: {exc}") from exc
+
+    try:
+        run = persist_refinement(session, request, result)
+        return result.model_copy(update={"refinement_id": run.id})
     except SQLAlchemyError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Refinement persistence failed.") from exc
